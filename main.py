@@ -38,40 +38,74 @@ def main():
 
     chain = create_chain(llm)
 
-    try:
-        st.sidebar.info("⏳ Connecting to MCP service")
-
-        agent = create_google_mcp_agent(llm)
-
-    except Exception as e:
-        st.sidebar.error(f"❌ Failed to initialize MCP agent. Error: {str(e)}")
-        return
+    agent = None
+    if llm:
+        try:
+            agent = create_google_mcp_agent(llm)
+        except Exception as e:
+            st.sidebar.error(
+                f"❌ Exception during MCP agent creation in main.py: {str(e)}"
+            )
+            agent = None
 
     if user_input := st.chat_input("Type your message..."):
-        # Add user message to history
         st.session_state.chat_history.append(HumanMessage(content=user_input))
         with st.chat_message("user"):
             st.write(user_input)
 
-        # Process AI response only if there's new user input
-        response_container = st.empty()
-        full_response = ""
+        ai_response_content = None
 
-        # Stream the response from the chain
-        for chunk in chain.stream(
-            {
-                "chat_history": st.session_state.chat_history,  # Pass the updated history
-                "input": user_input,  # Pass the new user input
-            }
-        ):
-            full_response += chunk.content
-            response_container.markdown(full_response + "▌")
+        if agent:
+            st.sidebar.info("⚙️ Checking MCP agent for response...")
+            try:
+                mcp_response = asyncio.run(
+                    process_google_mcp_response(
+                        agent,
+                        user_input,
+                        st.session_state.chat_history,  # Pass full history for context
+                    )
+                )
+                if mcp_response:
+                    ai_response_content = mcp_response
+                    st.sidebar.success("✅ MCP agent handled the query.")
+                else:
+                    st.sidebar.info(
+                        "ℹ️ MCP agent did not handle the query, using standard chain."
+                    )
+            except Exception as e:
+                st.error(f"Error processing MCP response: {str(e)}")
+                st.sidebar.error(
+                    "⚠️ Error with MCP agent, falling back to standard chain."
+                )
+        else:
+            st.sidebar.info(
+                "ℹ️ MCP agent not available or not initialized, using standard chain."
+            )
 
-        response_container.markdown(full_response)
-        st.session_state.chat_history.append(AIMessage(content=full_response))
+        if ai_response_content:
+            with st.chat_message("assistant"):
+                st.write(ai_response_content)
+            st.session_state.chat_history.append(AIMessage(content=ai_response_content))
+        else:
+            # Fallback to standard chain if MCP did not provide a response
+            # or agent not available
+            with st.chat_message("assistant"):
+                response_container = st.empty()
+                full_response_streamed = ""
+                for chunk in chain.stream(
+                    {
+                        "chat_history": st.session_state.chat_history,
+                        "input": user_input,
+                    }
+                ):
+                    full_response_streamed += chunk.content
+                    response_container.markdown(full_response_streamed + "▌")
 
-        if user_input is not None:
-            asyncio.run(process_google_mcp_response(agent, user_input))
+                response_container.markdown(full_response_streamed)
+                if full_response_streamed:  # Add to history only if there's content
+                    st.session_state.chat_history.append(
+                        AIMessage(content=full_response_streamed)
+                    )
 
 
 if __name__ == "__main__":

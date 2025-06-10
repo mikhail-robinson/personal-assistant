@@ -2,7 +2,6 @@ import logging
 import os
 
 import streamlit as st
-from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_google_genai import ChatGoogleGenerativeAI
 from mcp_use import MCPAgent, MCPClient
@@ -17,7 +16,7 @@ def create_llm():
         )
         return None
 
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-04-17", temperature=0)
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-05-20", temperature=0)
 
     return llm
 
@@ -85,20 +84,31 @@ def create_google_mcp_agent(llm):
     return agent
 
 
-async def process_google_mcp_response(agent, user_input):
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        status_placeholder = st.empty()
+async def process_google_mcp_response(agent, user_input: str, chat_history: list):
+    """
+    Processes the user input using the Google MCP agent.
+    Returns the agent's response string if a tool was used and a response generated,
+    otherwise returns None.
+    """
+    try:
+        logging.info(
+            f"MCP Agent processing input: '{user_input}' with history length: {len(chat_history)}"
+        )
+        response = await agent.run(user_input)
+        logging.info(f"MCP Agent raw response: '{response}'")
 
-        status_placeholder.markdown("🔄 Running agent...")
-
-        st.sidebar.info("🌐 Agent is accessing Google MCP...")
-        full_response = await agent.run(user_input)
-
-        st.sidebar.success("✅ Agent has successfully accessed the Google MCP!")
-
-        message_placeholder.markdown(full_response)
-        status_placeholder.empty()
-        st.session_state.chat_history.append(AIMessage(content=full_response))
-
-        return full_response
+        if response and response.strip():
+            # If the agent provides a non-empty response,
+            # we assume it handled the input.
+            logging.info("MCP Agent provided a substantive response.")
+            return response
+        else:
+            # If agent returns None, empty string, or only whitespace,
+            # assume it did not handle the input with a tool.
+            logging.info(
+                "MCP Agent did not provide a substantive response, will fall back to main chain."
+            )
+            return None
+    except Exception as e:
+        logging.error(f"Error during Google MCP agent processing: {str(e)}")
+        return None  # Fallback: if agent fails, return None so main chain can be tried.
