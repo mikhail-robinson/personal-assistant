@@ -2,6 +2,7 @@ import logging
 import os
 
 import streamlit as st
+from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_google_genai import ChatGoogleGenerativeAI
 from mcp_use import MCPAgent, MCPClient
@@ -42,7 +43,12 @@ def create_google_mcp_agent(llm):
         "mcpServers": {
             "mcp-gsuite": {
                 "command": "uv",
-                "args": ["--directory", "/Users/mikhail/Documents/AI Projects/mcp-gsuite", "run", "mcp-gsuite"],
+                "args": [
+                    "--directory",
+                    "/Users/mikhail/Documents/AI Projects/mcp-gsuite",
+                    "run",
+                    "mcp-gsuite",
+                ],
             }
         }
     }
@@ -77,3 +83,22 @@ def create_google_mcp_agent(llm):
     st.sidebar.success("✅ MCP agent ready!")
 
     return agent, client
+
+
+async def process_google_mcp_response(agent, client, user_input):
+    with st.chat_message("assistant"):
+        message_placeholder = st.empty()
+        status_placeholder = st.empty()
+
+        status_placeholder.markdown("🔄 Running agent...")
+
+        st.sidebar.info("🌐 Agent is accessing Google MCP...")
+        full_response = await agent.run(user_input)
+
+        st.sidebar.success("✅ Agent has succesfully accessed the Google MCP!")
+
+        message_placeholder.markdown(full_response)
+        status_placeholder.empty()
+        st.session_state.chat_history.append(AIMessage(content=full_response))
+
+        return full_response
