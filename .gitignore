@@ -4,3 +4,5 @@ build
 logs
 *__pycache__*
 .google_refresh_token.json
+.gauth.json
+.accounts.json
