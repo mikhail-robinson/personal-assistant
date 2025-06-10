@@ -1,8 +1,15 @@
+import asyncio
+
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage
 
-from ai import create_chain, create_llm
+from ai import (
+    create_chain,
+    create_google_mcp_agent,
+    create_llm,
+    process_google_mcp_response,
+)
 
 
 def main():
@@ -31,6 +38,15 @@ def main():
 
     chain = create_chain(llm)
 
+    try:
+        st.sidebar.info("⏳ Connecting to MCP service")
+
+        agent = create_google_mcp_agent(llm)
+
+    except Exception as e:
+        st.sidebar.error(f"❌ Failed to initialize MCP agent. Error: {str(e)}")
+        return
+
     if user_input := st.chat_input("Type your message..."):
         # Add user message to history
         st.session_state.chat_history.append(HumanMessage(content=user_input))
@@ -53,6 +69,9 @@ def main():
 
         response_container.markdown(full_response)
         st.session_state.chat_history.append(AIMessage(content=full_response))
+
+        if user_input is not None:
+            asyncio.run(process_google_mcp_response(agent, user_input))
 
 
 if __name__ == "__main__":

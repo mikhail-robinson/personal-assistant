@@ -82,10 +82,10 @@ def create_google_mcp_agent(llm):
     logger.info("MCP agent successfully created")
     st.sidebar.success("✅ MCP agent ready!")
 
-    return agent, client
+    return agent
 
 
-async def process_google_mcp_response(agent, client, user_input):
+async def process_google_mcp_response(agent, user_input):
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         status_placeholder = st.empty()
@@ -95,7 +95,7 @@ async def process_google_mcp_response(agent, client, user_input):
         st.sidebar.info("🌐 Agent is accessing Google MCP...")
         full_response = await agent.run(user_input)
 
-        st.sidebar.success("✅ Agent has succesfully accessed the Google MCP!")
+        st.sidebar.success("✅ Agent has successfully accessed the Google MCP!")
 
         message_placeholder.markdown(full_response)
         status_placeholder.empty()
