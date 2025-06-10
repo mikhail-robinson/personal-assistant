@@ -39,12 +39,10 @@ def create_google_mcp_agent(llm):
     logger.info("Initializing MCP agent")
 
     config = {
-        {
-            "mcpServers": {
-                "mcp-gsuite": {
-                    "command": "uv",
-                    "args": ["--directory", "<dir_to>/mcp-gsuite", "run", "mcp-gsuite"],
-                }
+        "mcpServers": {
+            "mcp-gsuite": {
+                "command": "uv",
+                "args": ["--directory", "/Users/mikhail/Documents/AI Projects/mcp-gsuite", "run", "mcp-gsuite"],
             }
         }
     }
