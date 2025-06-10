@@ -1,5 +1,3 @@
-import asyncio
-
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage
@@ -8,7 +6,7 @@ from ai import (
     create_chain,
     create_google_mcp_agent,
     create_llm,
-    process_google_mcp_response,
+    try_get_mcp_response,
 )
 
 
@@ -53,39 +51,16 @@ def main():
         with st.chat_message("user"):
             st.write(user_input)
 
-        ai_response_content = None
+        google_mcp_response_content = try_get_mcp_response(
+            agent, user_input, st.session_state.chat_history
+        )
 
-        if agent:
-            st.sidebar.info("⚙️ Checking MCP agent for response...")
-            try:
-                mcp_response = asyncio.run(
-                    process_google_mcp_response(
-                        agent,
-                        user_input,
-                        st.session_state.chat_history,  # Pass full history for context
-                    )
-                )
-                if mcp_response:
-                    ai_response_content = mcp_response
-                    st.sidebar.success("✅ MCP agent handled the query.")
-                else:
-                    st.sidebar.info(
-                        "ℹ️ MCP agent did not handle the query, using standard chain."
-                    )
-            except Exception as e:
-                st.error(f"Error processing MCP response: {str(e)}")
-                st.sidebar.error(
-                    "⚠️ Error with MCP agent, falling back to standard chain."
-                )
-        else:
-            st.sidebar.info(
-                "ℹ️ MCP agent not available or not initialized, using standard chain."
-            )
-
-        if ai_response_content:
+        if google_mcp_response_content:
             with st.chat_message("assistant"):
-                st.write(ai_response_content)
-            st.session_state.chat_history.append(AIMessage(content=ai_response_content))
+                st.write(google_mcp_response_content)
+            st.session_state.chat_history.append(
+                AIMessage(content=google_mcp_response_content)
+            )
         else:
             # Fallback to standard chain if MCP did not provide a response
             # or agent not available
@@ -96,7 +71,7 @@ def main():
                     {
                         "chat_history": st.session_state.chat_history,
                         "input": user_input,
-                    }
+                    },
                 ):
                     full_response_streamed += chunk.content
                     response_container.markdown(full_response_streamed + "▌")

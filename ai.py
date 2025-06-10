@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 
@@ -112,3 +113,32 @@ async def process_google_mcp_response(agent, user_input: str, chat_history: list
     except Exception as e:
         logging.error(f"Error during Google MCP agent processing: {str(e)}")
         return None  # Fallback: if agent fails, return None so main chain can be tried.
+
+
+def try_get_mcp_response(agent, user_input, chat_history):
+    ai_response_content = None
+    if agent:
+        st.sidebar.info("⚙️ Checking MCP agent for response...")
+        try:
+            mcp_response = asyncio.run(
+                process_google_mcp_response(
+                    agent,
+                    user_input,
+                    chat_history,  # Pass full history for context
+                )
+            )
+            if mcp_response:
+                ai_response_content = mcp_response
+                st.sidebar.success("✅ MCP agent handled the query.")
+            else:
+                st.sidebar.info(
+                    "ℹ️ MCP agent did not handle the query, using standard chain."
+                )
+        except Exception as e:
+            st.error(f"Error processing MCP response: {str(e)}")
+            st.sidebar.error("⚠️ Error with MCP agent, falling back to standard chain.")
+    else:
+        st.sidebar.info(
+            "ℹ️ MCP agent not available or not initialized, using standard chain."
+        )
+    return ai_response_content
