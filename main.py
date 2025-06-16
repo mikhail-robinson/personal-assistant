@@ -52,18 +52,14 @@ async def main():
                     },
                     config={"callbacks": [handler]},
                 ):
-                    if "output" in chunk:
-                        full_response_streamed += chunk["output"]
-                        response_container.markdown(full_response_streamed + "▌")
-
-                    elif "actions" in chunk:
-                        print("Tool action:", chunk["actions"])
-
-        response_container.markdown(full_response_streamed)
-        if full_response_streamed:
-            st.session_state.chat_history.append(
-                AIMessage(content=full_response_streamed)
-            )
+                    if "messages" in chunk:
+                        for msg in chunk["messages"]:
+                            st.session_state.chat_history.append(msg)
+                            if isinstance(msg, AIMessage):
+                                full_response_streamed += msg.content
+                                response_container.markdown(
+                                    full_response_streamed + "▌"
+                                )
 
 
 if __name__ == "__main__":

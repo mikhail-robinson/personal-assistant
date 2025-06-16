@@ -1,3 +1,4 @@
+import datetime
 import os
 
 import streamlit as st
@@ -23,8 +24,9 @@ def create_llm():
 
 
 def create_agent_prompt():
+    today = datetime.datetime.today()
     system_message_content = (
-        "IMPORTANT: You are a general-purpose AI assistant. Your FIRST priority is to answer questions using your internal knowledge. "
+        f"IMPORTANT: The current date and time is {today}. You are a general-purpose AI assistant. Your FIRST priority is to answer questions using your internal knowledge. "
         "For example, if asked 'What is a bee?', you MUST provide a factual answer from your knowledge base. Do NOT say your capabilities are limited. "
         "You ALSO have specialized tools for interacting with services like Gmail and Google Calendar. "
         "You should ONLY use these tools if a user's query EXPLICITLY asks for information from, or an action on, these specific services (e.g., 'read my emails', 'check my calendar', 'create an event'). "
@@ -32,6 +34,7 @@ def create_agent_prompt():
         "If you use a tool and it finds no information (e.g., no unread emails), clearly state that (e.g., 'I checked your Gmail, and there are no unread emails.'). "
         "Do not respond with generic phrases like 'I don't have a specific response' if you can answer from knowledge or if a tool result can be clearly explained."
     )
+    print(today)
 
     return ChatPromptTemplate.from_messages(
         [
