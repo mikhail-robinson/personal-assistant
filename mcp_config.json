@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "mcp-gsuite": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/mikhail/Documents/AI Projects/mcp-gsuite",
+        "run",
+        "mcp-gsuite"
+      ]
+    }
+  }
+}

@@ -1,11 +1,12 @@
 import asyncio
-import logging
 import os
 
 import streamlit as st
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_google_genai import ChatGoogleGenerativeAI
-from mcp_use import MCPAgent, MCPClient
+from mcp_use import MCPClient
+from mcp_use.adapters.langchain_adapter import LangChainAdapter
+from langchain.agents import AgentExecutor, create_tool_calling_agent
 
 
 def create_llm():
@@ -22,123 +23,58 @@ def create_llm():
     return llm
 
 
-def create_chain(llm):
-    """Create a language chain with conversation memory"""
+async def create_tool_enhanced_agent():
+    """
+    Creates a LangChain AgentExecutor with tools provided by MCPClient
+    and LangChainAdapter.
+    """
+    st.sidebar.info("Initializing MCPClient from mcp_config.json...")
+    try:
+        client = MCPClient.from_config_file("mcp_config.json")
+        st.sidebar.success("✅ MCP client initialized from mcp_config.json")
+    except Exception as e:
+        st.sidebar.error(f"❌ Failed to load MCP config: {str(e)}")
+        return None
 
-    prompt = ChatPromptTemplate.from_messages(
-        [MessagesPlaceholder(variable_name="chat_history"), ("human", "{input}")]
+    adapter = LangChainAdapter()
+    st.sidebar.info("Creating LangChain tools via adapter...")
+    try:
+        tools = await adapter.create_tools(client)
+        st.sidebar.success(f"✅ {len(tools)} LangChain tool(s) created: {[tool.name for tool in tools]}.")
+    except Exception as e:
+        st.sidebar.error(f"❌ Failed to create LangChain tools: {str(e)}")
+        return None
+
+    # Strongly guiding System message
+    system_message_content = (
+        "IMPORTANT: You are a general-purpose AI assistant. Your FIRST priority is to answer questions using your internal knowledge. "
+        "For example, if asked 'What is a bee?', you MUST provide a factual answer from your knowledge base. Do NOT say your capabilities are limited. "
+        "You ALSO have specialized tools for interacting with services like Gmail and Google Calendar. "
+        "You should ONLY use these tools if a user's query EXPLICITLY asks for information from, or an action on, these specific services (e.g., 'read my emails', 'check my calendar', 'create an event'). "
+        "If a query is general (e.g., 'What is the capital of France?', 'Tell me about photosynthesis'), answer it directly using your knowledge. "
+        "If you use a tool and it finds no information (e.g., no unread emails), clearly state that (e.g., 'I checked your Gmail, and there are no unread emails.'). "
+        "Do not respond with generic phrases like 'I don't have a specific response' if you can answer from knowledge or if a tool result can be clearly explained."
     )
 
-    chain = prompt | llm
-    return chain
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_message_content),
+        MessagesPlaceholder(variable_name="chat_history"),
+        ("human", "{input}"),
+        MessagesPlaceholder(variable_name="agent_scratchpad")
+    ])
 
+    llm = create_llm()
 
-def create_google_mcp_agent(llm):
-    """Create an MCP agent for accessing the google suite"""
+    llm_with_tools = llm.bind_tools(tools)
 
-    logger = logging.getLogger("chatbot")
-    logger.info("Initializing MCP agent")
+    agent = create_tool_calling_agent(llm_with_tools, tools, prompt) # Create the agent
 
-    config = {
-        "mcpServers": {
-            "mcp-gsuite": {
-                "command": "uv",
-                "args": [
-                    "--directory",
-                    "/Users/mikhail/Documents/AI Projects/mcp-gsuite",
-                    "run",
-                    "mcp-gsuite",
-                ],
-            }
-        }
-    }
-
-    try:
-        # Log the actual configuration
-        logger.info(f"MCP config: {config}")
-
-        # Create the client
-        client = MCPClient.from_dict(config)
-
-        # Add status message to UI
-        st.sidebar.success("✅ MCP Docker configuration initialized")
-
-    except Exception as e:
-        logger.error(f"Failed to create MCP client: {str(e)}")
-        st.sidebar.error(f"❌ Failed to configure MCP: {str(e)}")
-        # Create a fallback client
-        client = MCPClient.from_dict(config)
-
-    logger.info("Creating MCP agent")
-
-    agent = MCPAgent(
-        llm=llm,
-        client=client,
-        max_steps=30,
+    agent_executor = AgentExecutor(
+        agent=agent,
+        tools=tools,
         verbose=True,
-        # system_message parameter intentionally omitted for Gemini compatibility
+        handle_parsing_errors=True
     )
 
-    logger.info("MCP agent successfully created")
-    st.sidebar.success("✅ MCP agent ready!")
-
-    return agent
-
-
-async def process_google_mcp_response(agent, user_input: str, chat_history: list):
-    """
-    Processes the user input using the Google MCP agent.
-    Returns the agent's response string if a tool was used and a response generated,
-    otherwise returns None.
-    """
-    try:
-        logging.info(
-            f"MCP Agent processing input: '{user_input}' with history length: {len(chat_history)}"
-        )
-        response = await agent.run(user_input)
-        logging.info(f"MCP Agent raw response: '{response}'")
-
-        if response and response.strip():
-            # If the agent provides a non-empty response,
-            # we assume it handled the input.
-            logging.info("MCP Agent provided a substantive response.")
-            return response
-        else:
-            # If agent returns None, empty string, or only whitespace,
-            # assume it did not handle the input with a tool.
-            logging.info(
-                "MCP Agent did not provide a substantive response, will fall back to main chain."
-            )
-            return None
-    except Exception as e:
-        logging.error(f"Error during Google MCP agent processing: {str(e)}")
-        return None  # Fallback: if agent fails, return None so main chain can be tried.
-
-
-def try_get_mcp_response(agent, user_input, chat_history):
-    ai_response_content = None
-    if agent:
-        st.sidebar.info("⚙️ Checking MCP agent for response...")
-        try:
-            mcp_response = asyncio.run(
-                process_google_mcp_response(
-                    agent,
-                    user_input,
-                    chat_history,  # Pass full history for context
-                )
-            )
-            if mcp_response:
-                ai_response_content = mcp_response
-                st.sidebar.success("✅ MCP agent handled the query.")
-            else:
-                st.sidebar.info(
-                    "ℹ️ MCP agent did not handle the query, using standard chain."
-                )
-        except Exception as e:
-            st.error(f"Error processing MCP response: {str(e)}")
-            st.sidebar.error("⚠️ Error with MCP agent, falling back to standard chain.")
-    else:
-        st.sidebar.info(
-            "ℹ️ MCP agent not available or not initialized, using standard chain."
-        )
-    return ai_response_content
+    st.sidebar.success("✅ Tool-enhanced AgentExecutor ready!")
+    return agent_executor
