@@ -45,21 +45,20 @@ async def main():
                 handler = CallbackHandler()
                 response_container = st.empty()
                 full_response_streamed = ""
-                async for chunk in agent.astream(
+                print(st.session_state.chat_history)
+                result = await agent.ainvoke(
                     {
                         "chat_history": st.session_state.chat_history,
                         "input": user_input,
                     },
                     config={"callbacks": [handler]},
-                ):
-                    if "messages" in chunk:
-                        for msg in chunk["messages"]:
-                            st.session_state.chat_history.append(msg)
-                            if isinstance(msg, AIMessage):
-                                full_response_streamed += msg.content
-                                response_container.markdown(
-                                    full_response_streamed + "▌"
-                                )
+                )
+                st.session_state.chat_history.append(result["output"])
+                full_response_streamed += result["output"]
+                from pprint import pprint
+
+                pprint(result)
+                response_container.markdown(full_response_streamed)
 
 
 if __name__ == "__main__":
