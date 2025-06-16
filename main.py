@@ -44,21 +44,30 @@ async def main():
                 span.update_trace(input={"input": user_input})
                 handler = CallbackHandler()
                 response_container = st.empty()
-                full_response_streamed = ""
-                print(st.session_state.chat_history)
-                result = await agent.ainvoke(
+                response_container.markdown("<i>Assistant is thinking...</i>")
+
+                full_response_content = ""
+
+                async for chunk in agent.astream(
                     {
                         "chat_history": st.session_state.chat_history,
                         "input": user_input,
                     },
                     config={"callbacks": [handler]},
-                )
-                st.session_state.chat_history.append(result["output"])
-                full_response_streamed += result["output"]
-                from pprint import pprint
+                ):
+                    if "output" in chunk and chunk["output"]:
+                        chunk_content = chunk["output"]
+                        print("--- Streaming Chunk Received ---")
+                        print(chunk)
+                        print(f"Content: {chunk_content}")
+                        print("------------------------------")
+                        full_response_content += chunk_content
+                        response_container.markdown(full_response_content)
 
-                pprint(result)
-                response_container.markdown(full_response_streamed)
+                if full_response_content:
+                    st.session_state.chat_history.append(
+                        AIMessage(content=full_response_content)
+                    )
 
 
 if __name__ == "__main__":
