@@ -1,17 +1,17 @@
 import asyncio
+
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from ai import (
     create_tool_enhanced_agent,
 )
 
-
 load_dotenv()
-async def main():
 
+
+async def main():
     st.title(
         "Siri but now when I ask it questions it will actually give me the answer and not just show me responses from google"
     )
@@ -29,10 +29,7 @@ async def main():
             with st.chat_message("user"):
                 st.write(message.content)
 
-    if "agent_executor" not in st.session_state:
-      st.session_state.agent_executor = await create_tool_enhanced_agent()
-
-    chain = st.session_state.agent_executor
+    agent = await create_tool_enhanced_agent()
 
     if user_input := st.chat_input("Type your message..."):
         st.session_state.chat_history.append(HumanMessage(content=user_input))
@@ -40,22 +37,28 @@ async def main():
             st.write(user_input)
 
         with st.chat_message("assistant"):
-                response_container = st.empty()
-                full_response_streamed = ""
-                async for chunk in chain.astream(
-                    {
-                        "chat_history": st.session_state.chat_history,
-                        "input": user_input,
-                    },
-                ):
+            response_container = st.empty()
+            full_response_streamed = ""
+            async for chunk in agent.astream(
+                {
+                    "chat_history": st.session_state.chat_history,
+                    "input": user_input,
+                },
+            ):
+                # Handle final output
+                if "output" in chunk:
                     full_response_streamed += chunk["output"]
                     response_container.markdown(full_response_streamed + "▌")
 
-                response_container.markdown(full_response_streamed)
-                if full_response_streamed:  # Add to history only if there's content
-                    st.session_state.chat_history.append(
-                        AIMessage(content=full_response_streamed)
-                    )
+                # Optional: handle tool actions or messages if you want to show them
+                elif "actions" in chunk:
+                    print("Tool action:", chunk["actions"])
+
+        response_container.markdown(full_response_streamed)
+        if full_response_streamed:  # Add to history only if there's content
+            st.session_state.chat_history.append(
+                AIMessage(content=full_response_streamed)
+            )
 
 
 if __name__ == "__main__":

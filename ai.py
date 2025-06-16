@@ -1,12 +1,11 @@
-import asyncio
 import os
 
 import streamlit as st
+from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_google_genai import ChatGoogleGenerativeAI
 from mcp_use import MCPClient
 from mcp_use.adapters.langchain_adapter import LangChainAdapter
-from langchain.agents import AgentExecutor, create_tool_calling_agent
 
 
 def create_llm():
@@ -23,29 +22,7 @@ def create_llm():
     return llm
 
 
-async def create_tool_enhanced_agent():
-    """
-    Creates a LangChain AgentExecutor with tools provided by MCPClient
-    and LangChainAdapter.
-    """
-    st.sidebar.info("Initializing MCPClient from mcp_config.json...")
-    try:
-        client = MCPClient.from_config_file("mcp_config.json")
-        st.sidebar.success("✅ MCP client initialized from mcp_config.json")
-    except Exception as e:
-        st.sidebar.error(f"❌ Failed to load MCP config: {str(e)}")
-        return None
-
-    adapter = LangChainAdapter()
-    st.sidebar.info("Creating LangChain tools via adapter...")
-    try:
-        tools = await adapter.create_tools(client)
-        st.sidebar.success(f"✅ {len(tools)} LangChain tool(s) created: {[tool.name for tool in tools]}.")
-    except Exception as e:
-        st.sidebar.error(f"❌ Failed to create LangChain tools: {str(e)}")
-        return None
-
-    # Strongly guiding System message
+def create_agent_prompt():
     system_message_content = (
         "IMPORTANT: You are a general-purpose AI assistant. Your FIRST priority is to answer questions using your internal knowledge. "
         "For example, if asked 'What is a bee?', you MUST provide a factual answer from your knowledge base. Do NOT say your capabilities are limited. "
@@ -56,24 +33,44 @@ async def create_tool_enhanced_agent():
         "Do not respond with generic phrases like 'I don't have a specific response' if you can answer from knowledge or if a tool result can be clearly explained."
     )
 
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_message_content),
-        MessagesPlaceholder(variable_name="chat_history"),
-        ("human", "{input}"),
-        MessagesPlaceholder(variable_name="agent_scratchpad")
-    ])
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", system_message_content),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("human", "{input}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ]
+    )
 
+
+async def google_mcp_tools():
+    client = MCPClient.from_config_file("mcp_config.json")
+    adapter = LangChainAdapter()
+    try:
+        tools = await adapter.create_tools(client)
+        st.sidebar.success(
+            f"✅ {len(tools)} LangChain tool(s) created: {[tool.name for tool in tools]}."
+        )
+    except Exception as e:
+        st.sidebar.error(f"❌ Failed to create LangChain tools: {str(e)}")
+        return None
+    if tools:
+        return tools
+
+
+async def create_tool_enhanced_agent():
     llm = create_llm()
+    prompt = create_agent_prompt()
+    tools = await google_mcp_tools()
+    if not tools:
+        return None
 
     llm_with_tools = llm.bind_tools(tools)
 
-    agent = create_tool_calling_agent(llm_with_tools, tools, prompt) # Create the agent
+    agent = create_tool_calling_agent(llm_with_tools, tools, prompt)  # Create the agent
 
     agent_executor = AgentExecutor(
-        agent=agent,
-        tools=tools,
-        verbose=True,
-        handle_parsing_errors=True
+        agent=agent, tools=tools, verbose=True, handle_parsing_errors=True
     )
 
     st.sidebar.success("✅ Tool-enhanced AgentExecutor ready!")
