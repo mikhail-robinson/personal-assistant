@@ -2,9 +2,9 @@ import datetime
 import os
 
 import streamlit as st
-from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langgraph.prebuilt import create_react_agent
 from mcp_use import MCPClient
 from mcp_use.adapters.langchain_adapter import LangChainAdapter
 
@@ -39,9 +39,7 @@ def create_agent_prompt():
     return ChatPromptTemplate.from_messages(
         [
             ("system", system_message_content),
-            MessagesPlaceholder(variable_name="chat_history"),
-            ("human", "{input}"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
+            MessagesPlaceholder(variable_name="messages"),
         ]
     )
 
@@ -68,11 +66,7 @@ async def create_tool_enhanced_agent():
     if not tools:
         return None
 
-    agent = create_tool_calling_agent(llm, tools, prompt)
-
-    agent_executor = AgentExecutor(
-        agent=agent, tools=tools, verbose=True, handle_parsing_errors=True
-    )
+    agent = create_react_agent(llm, tools, prompt=prompt)
 
     st.sidebar.success("✅ Tool-enhanced AgentExecutor ready!")
-    return agent_executor
+    return agent

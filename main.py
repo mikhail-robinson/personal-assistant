@@ -6,9 +6,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langfuse import get_client
 from langfuse.langchain import CallbackHandler
 
-from ai import (
-    create_tool_enhanced_agent,
-)
+from ai import create_tool_enhanced_agent
 
 load_dotenv()
 
@@ -35,7 +33,8 @@ async def main():
     agent = await create_tool_enhanced_agent()
 
     if user_input := st.chat_input("Type your message..."):
-        st.session_state.chat_history.append(HumanMessage(content=user_input))
+        user_message = HumanMessage(content=user_input)
+        st.session_state.chat_history.append(user_message)
         with st.chat_message("user"):
             st.write(user_input)
 
@@ -44,26 +43,30 @@ async def main():
                 span.update_trace(input={"input": user_input})
                 handler = CallbackHandler()
                 response_container = st.empty()
-                response_container.markdown("<i>Assistant is thinking...</i>")
+                response_container.markdown("Hmmmm...")
 
                 full_response_content = ""
 
                 async for chunk in agent.astream(
-                    {
-                        "chat_history": st.session_state.chat_history,
-                        "input": user_input,
-                    },
+                    {"messages": st.session_state.chat_history},
+                    stream_mode="messages",
                     config={"callbacks": [handler]},
                 ):
-                    if "output" in chunk and chunk["output"]:
-                        chunk_content = chunk["output"]
-                        print("--- Streaming Chunk Received ---")
-                        print(chunk)
-                        print(f"Content: {chunk_content}")
-                        print("------------------------------")
-                        full_response_content += chunk_content
-                        response_container.markdown(full_response_content)
-
+                    # chunk is a tuple: (AIMessageChunk, metadata_dict)
+                    if len(chunk) >= 1:
+                        message_chunk = chunk[0]  # Get the AIMessageChunk
+                        if (
+                            hasattr(message_chunk, "content")
+                            and message_chunk.content
+                            and not (
+                                hasattr(message_chunk, "tool_calls")
+                                and message_chunk.tool_calls
+                            )
+                            and not hasattr(message_chunk, "type")
+                            or message_chunk.type != "tool"
+                        ):
+                            full_response_content += message_chunk.content
+                            response_container.markdown(full_response_content)
                 if full_response_content:
                     st.session_state.chat_history.append(
                         AIMessage(content=full_response_content)
