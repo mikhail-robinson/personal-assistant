@@ -6,7 +6,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langfuse import get_client
 from langfuse.langchain import CallbackHandler
 
-from ai import create_tool_enhanced_agent
+from ai import create_central_llm_agent # Updated import
 
 load_dotenv()
 
@@ -30,7 +30,7 @@ async def main():
             with st.chat_message("user"):
                 st.write(message.content)
 
-    agent = await create_tool_enhanced_agent()
+    agent = await create_central_llm_agent() # Updated agent creation
 
     if user_input := st.chat_input("Type your message..."):
         user_message = HumanMessage(content=user_input)
