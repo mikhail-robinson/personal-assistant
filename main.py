@@ -2,11 +2,15 @@ import asyncio
 
 import streamlit as st
 from dotenv import load_dotenv
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langfuse import get_client
 from langfuse.langchain import CallbackHandler
 
-from ai import create_central_llm_agent # Updated import
+from ai import (
+    CENTRAL_LLM_TOOLS,
+    create_central_llm_prompt,
+    create_central_llm_with_tools,
+)  # Updated import
 
 load_dotenv()
 
@@ -30,7 +34,10 @@ async def main():
             with st.chat_message("user"):
                 st.write(message.content)
 
-    agent = await create_central_llm_agent() # Updated agent creation
+    llm_with_tools = await create_central_llm_with_tools()
+    prompt = create_central_llm_prompt()
+
+    chain = prompt | llm_with_tools
 
     if user_input := st.chat_input("Type your message..."):
         user_message = HumanMessage(content=user_input)
@@ -45,32 +52,54 @@ async def main():
                 response_container = st.empty()
                 response_container.markdown("Hmmmm...")
 
+                initial_response_messsage = await chain.ainvoke(
+                    {"messages": st.session_state.chat_history},
+                    config={"callbacks": [handler]},
+                )
+
+                st.session_state.chat_history.append(initial_response_messsage)
+
                 full_response_content = ""
 
-                async for chunk in agent.astream(
-                    {"messages": st.session_state.chat_history},
-                    stream_mode="messages",
-                    config={"callbacks": [handler]},
-                ):
-                    # chunk is a tuple: (AIMessageChunk, metadata_dict)
-                    if len(chunk) >= 1:
-                        message_chunk = chunk[0]  # Get the AIMessageChunk
-                        if (
-                            hasattr(message_chunk, "content")
-                            and message_chunk.content
-                            and not (
-                                hasattr(message_chunk, "tool_calls")
-                                and message_chunk.tool_calls
+                if initial_response_messsage.tool_calls:
+                    tool_messages_for_llm = []
+                    for tool_call in initial_response_messsage.tool_calls:
+                        tool_name = tool_call["name"]
+                        tool_args = tool_call["args"]
+
+                        tool_function = None
+                        for tool in CENTRAL_LLM_TOOLS:
+                            if tool.name == tool_name:
+                                tool_function = tool
+                                break
+
+                        if tool_function:
+                            print("Tool Function:", tool_function)
+                            tool_result = tool_function.invoke(tool_args)
+                            tool_message = ToolMessage(
+                                content=str(tool_result), tool_call_id=tool_call["id"]
                             )
-                            and not hasattr(message_chunk, "type")
-                            or message_chunk.type != "tool"
-                        ):
-                            full_response_content += message_chunk.content
-                            response_container.markdown(full_response_content)
-                if full_response_content:
-                    st.session_state.chat_history.append(
-                        AIMessage(content=full_response_content)
-                    )
+                            tool_messages_for_llm.append(tool_message)
+
+                            st.session_state.chat_history.extend(tool_messages_for_llm)
+
+                    print("Chat History", st.session_state.chat_history)
+                    async for chunk in chain.astream(
+                        {"messages": st.session_state.chat_history},
+                        stream_mode="messages",
+                        config={"callbacks": [handler]},
+                    ):
+                        full_response_content += chunk.content
+                        response_container.markdown(full_response_content)
+                    response_container.markdown(full_response_content)
+                    if full_response_content:
+                        st.session_state.chat_history.append(
+                            AIMessage(content=full_response_content)
+                        )
+                else:
+                    full_response_content = initial_response_messsage.content
+                    if full_response_content:
+                        response_container.markdown(full_response_content)
 
 
 if __name__ == "__main__":
