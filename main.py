@@ -75,7 +75,7 @@ async def main():
 
                         if tool_function:
                             print("Tool Function:", tool_function)
-                            tool_result = tool_function.invoke(tool_args)
+                            tool_result = await tool_function.ainvoke(tool_args)
                             tool_message = ToolMessage(
                                 content=str(tool_result), tool_call_id=tool_call["id"]
                             )
