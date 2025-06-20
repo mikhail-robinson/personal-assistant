@@ -52,18 +52,38 @@ async def main():
                 response_container = st.empty()
                 response_container.markdown("Hmmmm...")
 
-                initial_response_messsage = await chain.ainvoke(
-                    {"messages": st.session_state.chat_history},
-                    config={"callbacks": [handler]},
-                )
+                full_initial_stream_content = ""
+                accumulated_initial_message_chunk = None
 
-                st.session_state.chat_history.append(initial_response_messsage)
+                # Stream initial message response
+                async for chunk in chain.astream(
+                    {"messages": st.session_state.chat_history},
+                    stream_mode="messages",
+                    config={"callbacks": [handler]},
+                ):
+                    # output the streamed response to the user
+                    if chunk.content:
+                        full_initial_stream_content += chunk.content
+                        response_container.markdown(full_initial_stream_content)
+
+                    # get the whole chunk to check for tool calls
+                    if accumulated_initial_message_chunk is None:
+                        accumulated_initial_message_chunk = chunk
+                    else:
+                        accumulated_initial_message_chunk += chunk
+                if accumulated_initial_message_chunk:
+                    st.session_state.chat_history.append(
+                        accumulated_initial_message_chunk
+                    )
 
                 full_response_content = ""
 
-                if initial_response_messsage.tool_calls:
+                if (
+                    accumulated_initial_message_chunk
+                    and accumulated_initial_message_chunk.tool_calls
+                ):
                     tool_messages_for_llm = []
-                    for tool_call in initial_response_messsage.tool_calls:
+                    for tool_call in accumulated_initial_message_chunk.tool_calls:
                         tool_name = tool_call["name"]
                         tool_args = tool_call["args"]
 
@@ -74,7 +94,6 @@ async def main():
                                 break
 
                         if tool_function:
-                            print("Tool Function:", tool_function)
                             tool_result = await tool_function.ainvoke(tool_args)
                             tool_message = ToolMessage(
                                 content=str(tool_result), tool_call_id=tool_call["id"]
@@ -83,7 +102,6 @@ async def main():
 
                             st.session_state.chat_history.extend(tool_messages_for_llm)
 
-                    print("Chat History", st.session_state.chat_history)
                     async for chunk in chain.astream(
                         {"messages": st.session_state.chat_history},
                         stream_mode="messages",
@@ -96,10 +114,6 @@ async def main():
                         st.session_state.chat_history.append(
                             AIMessage(content=full_response_content)
                         )
-                else:
-                    full_response_content = initial_response_messsage.content
-                    if full_response_content:
-                        response_container.markdown(full_response_content)
 
 
 if __name__ == "__main__":
