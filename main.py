@@ -71,6 +71,7 @@ async def main():
                         accumulated_initial_message_chunk = chunk
                     else:
                         accumulated_initial_message_chunk += chunk
+
                 if accumulated_initial_message_chunk:
                     st.session_state.chat_history.append(
                         accumulated_initial_message_chunk
@@ -114,7 +115,6 @@ async def main():
                         st.session_state.chat_history.append(
                             AIMessage(content=full_response_content)
                         )
-
 
 if __name__ == "__main__":
     asyncio.run(main())
