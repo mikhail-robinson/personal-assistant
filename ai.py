@@ -1,10 +1,8 @@
 import datetime
+import logging
 import os
 
-import streamlit as st
-from langchain_core.messages import (
-    HumanMessage,
-)  # For run_gsuite_agent and central agent
+from langchain_core.messages import HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import Tool
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -17,10 +15,9 @@ def create_llm():
     """Create a language model instance"""
 
     if not os.environ.get("GOOGLE_API_KEY"):
-        st.error(
+        raise ValueError(
             "GOOGLE_API_KEY not found in environment variables. Please add it to your .env file."
         )
-        return None
 
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-05-20", temperature=0)
 
@@ -49,39 +46,28 @@ async def google_mcp_tools():
     adapter = LangChainAdapter()
     try:
         tools = await adapter.create_tools(client)
-        st.sidebar.success(
+        logging.info(
             f"✅ {len(tools)} LangChain tool(s) created: {[tool.name for tool in tools]}."
         )
     except Exception as e:
-        st.sidebar.error(f"❌ Failed to create LangChain tools: {str(e)}")
-        return None
+        raise RuntimeError(f"❌ Failed to create LangChain tools: {str(e)}")
     if tools:
         return tools
 
 
 async def create_gsuite_agent_executor():
     llm = create_llm()
-    if not llm:
-        st.sidebar.error("❌ GSuite Agent: Failed to create language model.")
-        return None
     prompt = create_agent_prompt()
     tools = await google_mcp_tools()
-    if not tools:
-        st.sidebar.error("❌ GSuite Agent: MCP tools failed to load for GSuite agent.")
-        return None
-
     agent = create_react_agent(llm, tools, prompt=prompt)
 
-    st.sidebar.success("✅ GSuite AgentExecutor ready!")  # Updated message
+    logging.info("✅ GSuite AgentExecutor ready!")
     return agent
 
 
-# --- Phase 1: GSuite Agent as a Tool ---
 async def run_gsuite_agent(query: str) -> str:
     """Runs the GSuite agent with the given query and returns its output."""
     gsuite_agent_executor = await create_gsuite_agent_executor()
-    if not gsuite_agent_executor:
-        return "Error: GSuite agent failed to initialize."
 
     try:
         response = await gsuite_agent_executor.ainvoke(
@@ -110,8 +96,7 @@ async def run_gsuite_agent(query: str) -> str:
             final_output = str(final_output)  # Ensure it's a string
         return final_output
     except Exception as e:
-        st.error(f"Error running GSuite agent: {e}")
-        return f"Error processing your GSuite request: {str(e)}"
+        raise RuntimeError(f"Error running GSuite agent: {str(e)}")
 
 
 gsuite_tool = Tool(
@@ -122,7 +107,6 @@ gsuite_tool = Tool(
 )
 
 
-# --- Phase 2: Central LLM Agent ---
 def create_central_llm_prompt():
     """Creates the prompt for the Central LLM Agent."""
     today = datetime.datetime.today()
@@ -144,9 +128,6 @@ def create_central_llm_prompt():
 async def create_central_llm_with_tools():
     """Creates the Central LLM Agent."""
     llm = create_llm()
-    if not llm:
-        st.error("❌ Central LLM: Failed to create language model.")
-        return None
 
     tools = [gsuite_tool]  # Only GSuite tool for now
 
