@@ -6,6 +6,7 @@ from typing import Any
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langfuse import get_client
 from langfuse.langchain import CallbackHandler
@@ -20,6 +21,20 @@ from ai import (
 load_dotenv()
 
 app = FastAPI()
+
+origins = [
+    "http://localhost",
+    "http://localhost:3000",
+    "http://192.168.1.76:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # Allows specific origins or ["*"] for all
+    allow_credentials=True, # Allows cookies to be included in requests
+    allow_methods=["*"],    # Allows all methods (GET, POST, OPTIONS, etc.)
+    allow_headers=["*"],    # Allows all headers
+)
 langfuse_client = get_client()
 
 GLOBAL_CHAT_HISTORY: list[BaseMessage] = [
