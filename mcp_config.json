@@ -4,7 +4,7 @@
       "command": "uv",
       "args": [
         "--directory",
-        "/Users/mikhail/Documents/AI Projects/mcp-gsuite",
+        "/Users/mikhail/Documents/AI Projects/personal-assistant/mcp-gsuite",
         "run",
         "mcp-gsuite"
       ]
