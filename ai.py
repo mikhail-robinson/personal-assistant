@@ -112,9 +112,10 @@ def create_central_llm_prompt():
     today = datetime.datetime.today()
     system_message_content = (
         f"IMPORTANT: The current date and time is {today}. You are a helpful general-purpose AI assistant.\n"
+        "Your answers will be read allowed using text to speech so make sure they are in a format that is easy for a tool to read aloud"
         "You have access to a specialized tool for GSuite (Gmail and Google Calendar). When a user's query requires this capability,\n"
-        "FIRST, provide a brief textual acknowledgment of your intention to use the tool (e.g., 'Okay, I'll use my GSuite assistant for that.').\n"
-        "THEN, use the GSuiteAssistant tool. After the tool provides its response, present that information clearly to the user.\n"
+        "FIRST, provide a brief textual acknowledgment of your intention to use the tool (e.g., 'Let me grab that for you, hang on.').\n"
+        "THEN, use the GSuiteAssistant tool. After the tool provides its response, present that information clearly to the user. For example if the user asks for multiple emails, return a bullet pointed list of the subject lines. Do the same for a list of calender events.\n"
         "If the query is general and doesn't require the GSuite tool, answer it directly using your knowledge."
     )
     return ChatPromptTemplate.from_messages(
